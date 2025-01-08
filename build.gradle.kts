@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     kotlin("jvm") version "2.0.20"
     kotlin("plugin.serialization") version "2.0.20"
@@ -43,4 +45,13 @@ tasks.withType<Jar> {
 
 tasks.build {
     dependsOn(tasks.shadowJar)
+}
+
+kotlin {
+    target.compilerOptions.jvmTarget.set(JvmTarget.JVM_1_8)
+}
+
+java {
+    targetCompatibility = JavaVersion.VERSION_1_8
+    sourceCompatibility = JavaVersion.VERSION_21
 }

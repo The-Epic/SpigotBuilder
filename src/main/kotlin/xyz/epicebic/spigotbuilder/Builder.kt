@@ -74,6 +74,7 @@ import kotlin.io.path.pathString
 import kotlin.io.path.walk
 import kotlin.io.path.writeBytes
 import kotlin.system.exitProcess
+import kotlin.time.measureTime
 
 
 class Builder(private val version: String, private val forceRecompile: Boolean, private val quiet: Boolean) {
@@ -108,7 +109,8 @@ class Builder(private val version: String, private val forceRecompile: Boolean, 
             System.setErr(PrintStream(FileOutputStream(FileDescriptor.err)))
             try {
                 logOut.close()
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
         })
 
         System.setOut(PrintStream(TeeOutputStream(out, logOut)))
@@ -118,24 +120,36 @@ class Builder(private val version: String, private val forceRecompile: Boolean, 
     fun start() {
         logOutput()
         this.startInstant = Instant.now()
-        setupRepos()
-        setupVanilla()
-        decompileVanilla()
-//        compileBukkit()
-        patchCraftBukkit()
+        downloadPortables()
+        val repoTime = measureTime { setupRepos() }
+        val vanillaSetupTime = measureTime { setupVanilla() }
+        val vanillaDecompileTime = measureTime { decompileVanilla() }
+        val cbPatchTime = measureTime { patchCraftBukkit() }
 
         val patchedDir = decompileDir.resolve("patched")
         copyPatchedFiles(Path(CRAFT_BUKKIT_REPO_DIR), patchedDir.toAbsolutePath())
-//        compileCraftBukkit()
         createCraftBukkitPatched()
 
         copyDirectories()
 
-        patchSpigot()
-        compileSpigot()
+        val spigotPatchTime = measureTime { patchSpigot() }
+        val spigotCompileTime = measureTime { compileSpigot() }
 
-
+//        Path(SPIGOT_REPO_DIR).resolve("Spigot-Server").resolve("target")
         println("Took ${Duration.between(startInstant, Instant.now()).seconds}")
+        println("""
+            Repo Setup Time: $repoTime
+            Vanilla Setup Time: $vanillaSetupTime
+            Vanilla Decompile Time: $vanillaDecompileTime
+            CraftBukkit Patch Time: $cbPatchTime
+            
+            Spigot Patch Time: $spigotPatchTime
+            Spigot Compile Time: $spigotCompileTime
+        """.trimIndent())
+    }
+
+    private fun downloadPortables() {
+
     }
 
 
@@ -163,7 +177,7 @@ class Builder(private val version: String, private val forceRecompile: Boolean, 
         }
 
 
-        if (spigotVersionMeta.toolsVersion > 128 ) {
+        if (spigotVersionMeta.toolsVersion > 128) {
             val vanillaMappings = Path(VANILLA_MAPPINGS)
             if (vanillaMappings.exists()) {
                 val correctFile = checkHash(pistonVersionMeta.downloads.serverMappings.sha1, vanillaMappings)
@@ -382,17 +396,19 @@ class Builder(private val version: String, private val forceRecompile: Boolean, 
 
         val patchDir = craftBukkitDir.resolve("nms-patches")
         val nmsDir = craftBukkitDir.resolve("src/main/java/net")
-        patchDir.walk(PathWalkOption.BREADTH_FIRST).filter { it.isRegularFile() }.filter { it.name.endsWith(".patch") }.forEach { path ->
-            val relativeName = patchDir.relativize(path).toString().replace(".patch", ".java")
-            val targetFile = if (relativeName.contains(File.separator)) relativeName else "net/minecraft/server/$relativeName"
-            val targetPath = nmsDir.parent.resolve(targetFile)
+        patchDir.walk(PathWalkOption.BREADTH_FIRST).filter { it.isRegularFile() }.filter { it.name.endsWith(".patch") }
+            .forEach { path ->
+                val relativeName = patchDir.relativize(path).toString().replace(".patch", ".java")
+                val targetFile =
+                    if (relativeName.contains(File.separator)) relativeName else "net/minecraft/server/$relativeName"
+                val targetPath = nmsDir.parent.resolve(targetFile)
 
-            targetPath.parent.createDirectories()
-            if (targetPath.notExists())  {
-                patchedDir.resolve(relativeName).copyTo(targetPath)
-                if (!quiet) println("Copied $relativeName to $targetPath")
+                targetPath.parent.createDirectories()
+                if (targetPath.notExists()) {
+                    patchedDir.resolve(relativeName).copyTo(targetPath)
+                    if (!quiet) println("Copied $relativeName to $targetPath")
+                }
             }
-        }
     }
 
     private fun createCraftBukkitPatched() {
@@ -511,7 +527,7 @@ class Builder(private val version: String, private val forceRecompile: Boolean, 
         val result: FetchResult = repo.fetch().call()
         repo.reset().setRef(ref).setMode(ResetCommand.ResetType.HARD).call()
 
-        if (ref == "master") repo.reset().setRef( "origin/master" ).setMode( ResetCommand.ResetType.HARD ).call()
+        if (ref == "master") repo.reset().setRef("origin/master").setMode(ResetCommand.ResetType.HARD).call()
 
         println("Checked out $ref")
 
