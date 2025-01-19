@@ -124,8 +124,7 @@ class MapUtil {
 
                     combined.add(
                         deobfClass(clazz, obf2Buk.inverse()) + " " + orig + " " + toObf(
-                            desc,
-                            obf2Buk.inverse()
+                            desc, obf2Buk.inverse()
                         ) + " " + targ
                     )
                 }
@@ -195,10 +194,7 @@ class MapUtil {
         }
 
         private fun csrgDesc(
-            first: Map<String, String>,
-            second: Map<String, String>,
-            args: String,
-            ret: String
+            first: Map<String, String>, second: Map<String, String>, args: String, ret: String
         ): String {
             val parts =
                 args.substring(1, args.length - 1).split(",".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()

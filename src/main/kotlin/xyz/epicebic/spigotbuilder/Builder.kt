@@ -90,6 +90,7 @@ class Builder(private val version: String, private val forceRecompile: Boolean, 
     private lateinit var decompileDir: Path
     private val mavenInvoker = DefaultInvoker()
     private var clonedRepo = false
+    private val windows = System.getProperty("os.name").startsWith("Windows")
 
 
     init {
@@ -135,9 +136,10 @@ class Builder(private val version: String, private val forceRecompile: Boolean, 
         val spigotPatchTime = measureTime { patchSpigot() }
         val spigotCompileTime = measureTime { compileSpigot() }
 
-//        Path(SPIGOT_REPO_DIR).resolve("Spigot-Server").resolve("target")
+        //        Path(SPIGOT_REPO_DIR).resolve("Spigot-Server").resolve("target")
         println("Took ${Duration.between(startInstant, Instant.now()).seconds}")
-        println("""
+        println(
+            """
             Repo Setup Time: $repoTime
             Vanilla Setup Time: $vanillaSetupTime
             Vanilla Decompile Time: $vanillaDecompileTime
@@ -145,7 +147,8 @@ class Builder(private val version: String, private val forceRecompile: Boolean, 
             
             Spigot Patch Time: $spigotPatchTime
             Spigot Compile Time: $spigotCompileTime
-        """.trimIndent())
+        """.trimIndent()
+        )
     }
 
     private fun downloadPortables() {
@@ -259,9 +262,7 @@ class Builder(private val version: String, private val forceRecompile: Boolean, 
         val dataMappings = Path(BUILD_DATA_REPO_DIR).resolve("mappings")
         val buildDataGit = Git.open(buildDataDir.toFile())
 
-        val mappings: Iterable<RevCommit> = buildDataGit.log()
-            .addPath("mappings/")
-            .setMaxCount(1).call()
+        val mappings: Iterable<RevCommit> = buildDataGit.log().addPath("mappings/").setMaxCount(1).call()
 
         //noinspection deprecation
         val mappingsHash = Hashing.md5().newHasher()
@@ -349,11 +350,9 @@ class Builder(private val version: String, private val forceRecompile: Boolean, 
         val decompileJava = decompileWorkDir.resolve("java")
         if (decompileJava.notExists()) {
             decompileJava.createDirectories()
-            // TODO allow for this to be quiet
-            ConsoleDecompiler.main(
+            ConsoleDecompiler.main( // TODO allow for this to be quiet
                 listOf(
-                    "-dgs=1", "-hdc=0", "-asc=1", "-udv=0", "-rsy=1", "-aoa=1",
-                    decompileClassesDir.pathString, decompileJava.pathString
+                    "-dgs=1", "-hdc=0", "-asc=1", "-udv=0", "-rsy=1", "-aoa=1", decompileClassesDir.pathString, decompileJava.pathString
                 ).toTypedArray()
             )
             println("Decompilation took ${Duration.between(decompileStart, Instant.now()).seconds}")
@@ -365,15 +364,9 @@ class Builder(private val version: String, private val forceRecompile: Boolean, 
         val patchesDir = Path(CRAFT_BUKKIT_REPO_DIR).resolve("nms-patches")
         val patchedDir = decompileDir.resolve("patched")
         if (patchedDir.exists()) return
-        val patcher = PatchOperation.builder()
-            .logTo(System.out)
-            .level(LogLevel.ALL)
-            .baseInput(FolderMultiInput(decompileDir.resolve("java")))
-            .patchesInput(FolderMultiInput(patchesDir))
-            .patchedOutput(FolderMultiOutput(patchedDir))
-            .rejectsOutput(FolderMultiOutput(Path(VANILLA_WORK_DIR).resolve("rejected")))
-//            .summary(true)
-            .build()
+        val patcher = PatchOperation.builder().logTo(System.out).level(LogLevel.ALL).baseInput(FolderMultiInput(decompileDir.resolve("java")))
+            .patchesInput(FolderMultiInput(patchesDir)).patchedOutput(FolderMultiOutput(patchedDir))
+            .rejectsOutput(FolderMultiOutput(Path(VANILLA_WORK_DIR).resolve("rejected"))).build()
 
         val result = patcher.operate()
         println("Applied ${result.summary?.changedFiles} patches")
@@ -391,24 +384,23 @@ class Builder(private val version: String, private val forceRecompile: Boolean, 
         mavenInvoker.execute(bukkitRequest)
     }
 
-    @OptIn(ExperimentalPathApi::class)
     private fun copyPatchedFiles(craftBukkitDir: Path, patchedDir: Path) {
 
         val patchDir = craftBukkitDir.resolve("nms-patches")
         val nmsDir = craftBukkitDir.resolve("src/main/java/net")
-        patchDir.walk(PathWalkOption.BREADTH_FIRST).filter { it.isRegularFile() }.filter { it.name.endsWith(".patch") }
-            .forEach { path ->
-                val relativeName = patchDir.relativize(path).toString().replace(".patch", ".java")
-                val targetFile =
-                    if (relativeName.contains(File.separator)) relativeName else "net/minecraft/server/$relativeName"
-                val targetPath = nmsDir.parent.resolve(targetFile)
 
-                targetPath.parent.createDirectories()
-                if (targetPath.notExists()) {
-                    patchedDir.resolve(relativeName).copyTo(targetPath)
-                    if (!quiet) println("Copied $relativeName to $targetPath")
-                }
+        if (nmsDir.exists()) return
+        patchDir.walk(PathWalkOption.BREADTH_FIRST).filter { it.isRegularFile() }.filter { it.name.endsWith(".patch") }.forEach { path ->
+            val relativeName = patchDir.relativize(path).toString().replace(".patch", ".java")
+            val targetFile = if (relativeName.contains(File.separator)) relativeName else "net/minecraft/server/$relativeName"
+            val targetPath = nmsDir.parent.resolve(targetFile)
+
+            targetPath.parent.createDirectories()
+            if (targetPath.notExists()) {
+                patchedDir.resolve(relativeName).copyTo(targetPath)
+                if (!quiet) println("Copied $relativeName to $targetPath")
             }
+        }
     }
 
     private fun createCraftBukkitPatched() {
@@ -418,8 +410,7 @@ class Builder(private val version: String, private val forceRecompile: Boolean, 
         craftBukkitGit.branchDelete().setBranchNames("patched").setForce(true).call()
         craftBukkitGit.checkout().setCreateBranch(true).setForceRefUpdate(true).setName("patched").call()
         craftBukkitGit.add().addFilepattern("src/main/java/net/").call()
-        craftBukkitGit.commit().setGpgConfig(GpgConfig(Config())).setSign(false)
-            .setMessage("CraftBukkit $ " + Date()).call()
+        craftBukkitGit.commit().setGpgConfig(GpgConfig(Config())).setSign(false).setMessage("CraftBukkit $ " + Date()).call()
         craftBukkitGit.checkout().setName(spigotVersionMeta.refs.craftBukkit).call()
     }
 
@@ -449,7 +440,6 @@ class Builder(private val version: String, private val forceRecompile: Boolean, 
     }
 
     private fun patchSpigot() {
-        // Apply Bukkit Patches
         val spigotParentDir = Path(SPIGOT_REPO_DIR)
         val bukkitDir = Path(BUKKIT_REPO_DIR)
 
@@ -474,7 +464,6 @@ class Builder(private val version: String, private val forceRecompile: Boolean, 
         mavenInvoker.execute(spigotRequest)
     }
 
-    @OptIn(ExperimentalPathApi::class)
     private fun applyPatches(what: String, target: Path, branch: String, spigotParent: Path) {
         println("Applying patches for '$what'")
         val git = Git.open(target.toFile())
@@ -490,14 +479,19 @@ class Builder(private val version: String, private val forceRecompile: Boolean, 
         git.fetch().setRemote("origin").call()
         git.reset().setMode(ResetCommand.ResetType.HARD).setRef(branch).call()
 
-        spigotParent.resolve("$what-Patches").walk(PathWalkOption.BREADTH_FIRST).forEach { patch ->
-            println("Applying $what Patch ${patch.name}")
+        if (windows) {
+            spigotParent.resolve("$what-Patches").walk(PathWalkOption.BREADTH_FIRST).forEach { patch ->
+                println("Applying Spigot-$what Patch ${patch.name}")
+                process(
+                    "git", "apply", "--ignore-whitespace", patch.absolutePathString(), directory = target.toFile()
+                ).waitFor()
+            }
+        } else {
             process(
-                "git",
-                "apply",
-                "--ignore-whitespace",
-                patch.absolutePathString(),
-                directory = target.toFile()
+                "git", "am", "--abort", directory = target.toFile()
+            ).waitFor() //git am --3way "../${what}-Patches/"*.patch
+            process(
+                "sh", "-c", "git am --3way ${spigotParent.resolve("$what-Patches").absolutePathString()}/*.patch", directory = target.toFile()
             ).waitFor()
         }
     }
@@ -571,11 +565,7 @@ class Builder(private val version: String, private val forceRecompile: Boolean, 
 
 
     private fun extractFile(
-        extractFrom: Path,
-        internalPath: String,
-        output: Path,
-        override: Boolean,
-        toExecute: (Path) -> Unit = {}
+        extractFrom: Path, internalPath: String, output: Path, override: Boolean, toExecute: (Path) -> Unit = {}
     ) {
         if (output.exists() && !override) return
         val zip = ZipFile(extractFrom.toFile())

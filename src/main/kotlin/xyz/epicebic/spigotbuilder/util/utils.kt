@@ -19,11 +19,7 @@ fun downloadUri(uri: URI, output: Path) {
     output.parent.createDirectories()
 
     val response = HTTP_CLIENT.send(
-        HttpRequest.newBuilder()
-            .GET()
-            .uri(uri)
-            .build(),
-        HttpResponse.BodyHandlers.ofFile(output)
+        HttpRequest.newBuilder().GET().uri(uri).build(), HttpResponse.BodyHandlers.ofFile(output)
     )
 
     response.body()
@@ -31,11 +27,7 @@ fun downloadUri(uri: URI, output: Path) {
 
 fun getUri(uri: URI): String {
     val response = HTTP_CLIENT.send(
-        HttpRequest.newBuilder()
-            .GET()
-            .uri(uri)
-            .build(),
-        HttpResponse.BodyHandlers.ofString()
+        HttpRequest.newBuilder().GET().uri(uri).build(), HttpResponse.BodyHandlers.ofString()
     )
 
     return response.body()

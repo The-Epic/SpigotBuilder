@@ -15,7 +15,7 @@ fun main(args: Array<String>) {
         exitProcess(0)
     }
 
-    VersionFinder.loadVersions().whenComplete { versions, ex  ->
+    VersionFinder.loadVersions().whenComplete { versions, ex ->
         ex?.printStackTrace()
 
         if (!versions.contains(version)) {

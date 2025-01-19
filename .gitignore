@@ -2,6 +2,7 @@
 /.gradle/
 /build/
 /build/classes/kotlin/main/
+/run
 
 .gradle
 build/
